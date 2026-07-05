@@ -58,6 +58,19 @@ def claim_next_message(db: Session) -> OutboundMessage | None:
     return msg
 
 
+def has_queued_messages() -> bool:
+    db = SessionLocal()
+    try:
+        found = db.scalar(
+            select(OutboundMessage.id)
+            .where(OutboundMessage.status == MessageStatus.QUEUED)
+            .limit(1)
+        )
+        return found is not None
+    finally:
+        db.close()
+
+
 async def process_one_message() -> bool:
     """Обработать одно сообщение. True — если что-то отправляли/пытались."""
     db = SessionLocal()

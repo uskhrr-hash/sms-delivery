@@ -12,7 +12,7 @@ services:
   sms-delivery:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8001:8000"
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://sms:sms@db:5432/sms_delivery

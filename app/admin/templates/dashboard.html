@@ -22,7 +22,7 @@
   </nav>
 
   <h1>Панель</h1>
-  <p class="muted">Пауза между СМС: {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек (имитация ручной отправки)</p>
+  <p class="muted">Пауза {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек только между СМС подряд; первая после простоя — без задержки</p>
 
   <ul>
     <li>В очереди: <strong>{{ stats.queued or 0 }}</strong></li>
