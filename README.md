@@ -41,6 +41,10 @@ Health: http://localhost:8000/health
 
 ## API для сайтов
 
+**Полная инструкция для разработчиков (PHP, Python и др.):** [docs/API.md](docs/API.md)
+
+Кратко:
+
 ```http
 POST /api/v1/messages
 Authorization: Bearer <api_key>
@@ -132,6 +136,6 @@ SEND_DELAY_MAX=180
 
 ## Что дальше
 
-- [ ] API для PHP-сайта (тот же контракт)
-- [ ] API: GET `/api/v1/incoming?processed=false` для заборки ответов
+- [x] API-инструкция для внешних сайтов — [docs/API.md](docs/API.md)
+- [ ] API: GET `/api/v1/incoming?processed=false` для заборки входящих ответов
 - [ ] Алерты если очередь растёт или все телефоны offline

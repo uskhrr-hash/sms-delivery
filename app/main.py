@@ -13,6 +13,8 @@ from app.api.messages import router as messages_router
 from app.api.webhooks import router as webhooks_router
 from app.config import get_settings
 from app.database import init_db
+from app.database import SessionLocal
+from app.services.api_clients import seed_clients_from_env
 from app.worker import worker_loop
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -21,6 +23,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    db = SessionLocal()
+    try:
+        seed_clients_from_env(db)
+    finally:
+        db.close()
     stop_event = asyncio.Event()
     task = asyncio.create_task(worker_loop(stop_event))
     yield

@@ -64,3 +64,15 @@ class IncomingMessage(Base):
     processed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     raw_payload: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ApiClient(Base):
+    """Сайт / магазин с API-ключом для отправки СМС."""
+
+    __tablename__ = 'api_clients'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    api_key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

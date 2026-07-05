@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>API-клиенты — SMS Delivery</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    nav a { margin-right: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: .45rem .6rem; text-align: left; vertical-align: top; }
+    code { background: #f4f4f4; padding: .1rem .3rem; word-break: break-all; }
+    .flash { background: #e8f5e9; border: 1px solid #81c784; padding: 1rem; margin: 1rem 0; }
+    .error { background: #ffebee; border: 1px solid #e57373; padding: .75rem; margin: 1rem 0; }
+    .muted { color: #666; font-size: .9rem; }
+    form.inline { display: inline; }
+    input[name=name] { width: 200px; padding: .35rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/admin/">← Панель</a>
+    <a href="/admin/messages">Исходящие</a>
+    <a href="/admin/incoming">Входящие</a>
+    <strong>API-клиенты</strong>
+  </nav>
+
+  <h1>Сайты и API-ключи</h1>
+  <p class="muted">
+    Каждый сайт (booking, shop, …) — отдельный клиент. В запросе:
+    <code>Authorization: Bearer &lt;ключ&gt;</code> — только ключ, без имени.
+  </p>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if flash_key %}
+  <div class="flash">
+    <strong>Новый ключ для «{{ flash_name }}»</strong> — скопируйте сейчас, потом показывается маской:<br>
+    <code id="newkey">{{ flash_key }}</code>
+    <p class="muted">Передайте разработчику сайта. В JSON можно указать <code>"source": "{{ flash_name }}"</code>.</p>
+  </div>
+  {% endif %}
+
+  <table>
+    <tr><th>Имя</th><th>Ключ (маска)</th><th>Вкл</th><th>Создан</th><th></th></tr>
+    {% for c in clients %}
+    <tr>
+      <td><code>{{ c.name }}</code></td>
+      <td><code>{{ mask_api_key(c.api_key) }}</code></td>
+      <td>{{ 'да' if c.enabled else 'нет' }}</td>
+      <td>{{ c.created_at }}</td>
+      <td>
+        <form class="inline" method="post" action="/admin/clients/{{ c.id }}/toggle">
+          <button type="submit">{{ 'Выключить' if c.enabled else 'Включить' }}</button>
+        </form>
+        <form class="inline" method="post" action="/admin/clients/{{ c.id }}/regenerate"
+              onsubmit="return confirm('Старый ключ перестанет работать. Продолжить?');">
+          <button type="submit">Новый ключ</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Клиентов нет — добавьте ниже или перезапустите сервис (импорт из .env при первом старте).</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Добавить сайт / магазин</h3>
+  <form method="post" action="/admin/clients">
+    <label>Имя (латиница, например <code>shop</code>):
+      <input name="name" required pattern="[a-z0-9_-]+" placeholder="shop">
+    </label>
+    <button type="submit">Создать и сгенерировать ключ</button>
+  </form>
+</body>
+</html>

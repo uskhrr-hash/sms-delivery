@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import Device, IncomingMessage, MessageStatus, OutboundMessage
+from app.models import ApiClient, Device, IncomingMessage, MessageStatus, OutboundMessage
+from app.services.api_clients import create_client, mask_api_key, regenerate_key
 
 router = APIRouter(prefix='/admin', tags=['admin'])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / 'templates'))
@@ -122,3 +123,59 @@ def messages_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
 def incoming_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     rows = db.scalars(select(IncomingMessage).order_by(desc(IncomingMessage.created_at)).limit(200)).all()
     return templates.TemplateResponse(request, 'incoming.html', {'messages': rows})
+
+
+@router.get('/clients', response_class=HTMLResponse, dependencies=[Depends(require_admin)])
+def clients_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    clients = db.scalars(select(ApiClient).order_by(ApiClient.name)).all()
+    flash_key = request.session.pop('flash_api_key', None)
+    flash_name = request.session.pop('flash_client_name', None)
+    error = request.session.pop('clients_error', None)
+    return templates.TemplateResponse(
+        request,
+        'clients.html',
+        {
+            'clients': clients,
+            'flash_key': flash_key,
+            'flash_name': flash_name,
+            'error': error,
+            'mask_api_key': mask_api_key,
+        },
+    )
+
+
+@router.post('/clients', dependencies=[Depends(require_admin)])
+def add_client(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+) -> RedirectResponse:
+    try:
+        client = create_client(db, name)
+        request.session['flash_api_key'] = client.api_key
+        request.session['flash_client_name'] = client.name
+    except ValueError as e:
+        request.session['clients_error'] = str(e)
+    return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
+
+
+@router.post('/clients/{client_id}/regenerate', dependencies=[Depends(require_admin)])
+def regenerate_client_key(
+    request: Request,
+    client_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    client = regenerate_key(db, client_id)
+    if client:
+        request.session['flash_api_key'] = client.api_key
+        request.session['flash_client_name'] = client.name
+    return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
+
+
+@router.post('/clients/{client_id}/toggle', dependencies=[Depends(require_admin)])
+def toggle_client(client_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    client = db.get(ApiClient, client_id)
+    if client:
+        client.enabled = not client.enabled
+        db.commit()
+    return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
