@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>SMS Delivery — панель</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    nav a { margin-right: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; }
+    .muted { color: #666; font-size: .9rem; }
+    form.inline { display: inline; }
+  </style>
+</head>
+<body>
+  <nav>
+    <strong>SMS Delivery</strong>
+    <a href="/admin/">Главная</a>
+    <a href="/admin/messages">Исходящие</a>
+    <a href="/admin/incoming">Входящие</a>
+    <a href="/admin/logout">Выход</a>
+  </nav>
+
+  <h1>Панель</h1>
+  <p class="muted">Пауза между СМС: {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек (имитация ручной отправки)</p>
+
+  <ul>
+    <li>В очереди: <strong>{{ stats.queued or 0 }}</strong></li>
+    <li>Отправлено (всего в БД): <strong>{{ stats.sent_today or 0 }}</strong></li>
+    <li>Ошибки: <strong>{{ stats.failed or 0 }}</strong></li>
+    <li>Входящие (не обработаны): <strong>{{ stats.incoming_new or 0 }}</strong></li>
+  </ul>
+
+  <h2>Устройства (round-robin)</h2>
+  <table>
+    <tr><th>Имя</th><th>Gateway ID</th><th>Номер</th><th>Вкл</th><th>Последняя отправка</th><th></th></tr>
+    {% for d in devices %}
+    <tr>
+      <td>{{ d.name }}</td>
+      <td><code>{{ d.gateway_device_id }}</code></td>
+      <td>{{ d.phone_label }}</td>
+      <td>{{ 'да' if d.enabled else 'нет' }}</td>
+      <td>{{ d.last_sent_at or '—' }}</td>
+      <td>
+        <form class="inline" method="post" action="/admin/devices/{{ d.id }}/toggle">
+          <button type="submit">{{ 'Выключить' if d.enabled else 'Включить' }}</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">Устройств нет — добавьте ниже (ID смотрите в SMS Gateway)</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Добавить устройство</h3>
+  <form method="post" action="/admin/devices">
+    <label>Имя <input name="name" required placeholder="phone-1"></label>
+    <label>Gateway device ID <input name="gateway_device_id" required></label>
+    <label>Подпись номера <input name="phone_label" placeholder="+7..."></label>
+    <label>Порядок <input name="sort_order" type="number" value="0"></label>
+    <button type="submit">Добавить</button>
+  </form>
+</body>
+</html>

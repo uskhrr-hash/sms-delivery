@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Исходящие — SMS Delivery</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    nav a { margin-right: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { border: 1px solid #ddd; padding: .35rem .5rem; vertical-align: top; }
+    .err { color: #b00020; max-width: 200px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/admin/">← Панель</a>
+    <a href="/admin/incoming">Входящие</a>
+  </nav>
+  <h1>Исходящие (последние 200)</h1>
+  <table>
+    <tr>
+      <th>Время</th><th>Статус</th><th>Телефон</th><th>Текст</th><th>Источник</th><th>Устр.</th><th>Ошибка</th>
+    </tr>
+    {% for m in messages %}
+    <tr>
+      <td>{{ m.created_at }}</td>
+      <td>{{ m.status.value }}</td>
+      <td>{{ m.phone }}</td>
+      <td>{{ m.text[:120] }}{% if m.text|length > 120 %}…{% endif %}</td>
+      <td>{{ m.source }} / {{ m.ref_id }}</td>
+      <td>{{ m.device_id or '—' }}</td>
+      <td class="err">{{ m.last_error or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
