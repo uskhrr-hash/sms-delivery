@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import ApiClient, Device, IncomingMessage, MessageStatus, OutboundMessage
 from app.services.api_clients import create_client, mask_api_key, regenerate_key
+from app.services.diagnostics import collect_checks, enqueue_test_sms
 
 router = APIRouter(prefix='/admin', tags=['admin'])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / 'templates'))
@@ -179,3 +180,35 @@ def toggle_client(client_id: int, db: Session = Depends(get_db)) -> RedirectResp
         client.enabled = not client.enabled
         db.commit()
     return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
+
+
+@router.get('/test', response_class=HTMLResponse, dependencies=[Depends(require_admin)])
+def test_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    checks = collect_checks(db)
+    flash_msg_id = request.session.pop('test_message_id', None)
+    error = request.session.pop('test_error', None)
+    return templates.TemplateResponse(
+        request,
+        'test.html',
+        {
+            'checks': checks,
+            'flash_msg_id': flash_msg_id,
+            'error': error,
+            'settings': get_settings(),
+        },
+    )
+
+
+@router.post('/test', dependencies=[Depends(require_admin)])
+def test_send(
+    request: Request,
+    db: Session = Depends(get_db),
+    phone: str = Form(...),
+    text: str = Form(...),
+) -> RedirectResponse:
+    try:
+        msg = enqueue_test_sms(db, phone, text)
+        request.session['test_message_id'] = msg.id
+    except ValueError as e:
+        request.session['test_error'] = str(e)
+    return RedirectResponse('/admin/test', status.HTTP_303_SEE_OTHER)
