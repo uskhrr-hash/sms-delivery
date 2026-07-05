@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import random
 import threading
 from datetime import UTC, datetime
@@ -12,6 +13,8 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.gateway.client import SmsGateClient, SmsGateError
 from app.models import Device, MessageStatus, OutboundMessage
+
+logger = logging.getLogger(__name__)
 
 
 class DevicePicker:
@@ -108,6 +111,7 @@ async def process_one_message() -> bool:
             msg.last_error = None
             msg.gateway_message_id = str(result.get('id') or result.get('messageId') or '')
             device.last_sent_at = msg.sent_at
+            logger.info('SMS sent id=%s phone=%s device=%s', msg.id, msg.phone, device.name)
         except SmsGateError as e:
             settings = get_settings()
             if msg.attempts >= settings.max_send_attempts:
@@ -115,6 +119,7 @@ async def process_one_message() -> bool:
             else:
                 msg.status = MessageStatus.QUEUED
             msg.last_error = str(e)
+            logger.warning('SMS send failed id=%s: %s', msg.id, e)
         db.commit()
         return True
     finally:
