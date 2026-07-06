@@ -4,16 +4,19 @@
   <meta charset="utf-8">
   <title>SMS Delivery — панель</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
     nav a { margin-right: 1rem; }
     table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
     th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; }
     .muted { color: #666; font-size: .9rem; }
     form.inline { display: inline; }
-    .cred-form { margin: .25rem 0 0; font-size: .9rem; }
-    .cred-form label { display: inline-block; margin-right: .5rem; }
-    .cred-form input { margin-left: .25rem; }
+    .device-form { margin: .25rem 0 .75rem; padding: .6rem .75rem; background: #f8fafc; border: 1px solid #e2e8f0; font-size: .9rem; }
+    .device-form label { display: inline-block; margin: .2rem .75rem .2rem 0; }
+    .device-form input { margin-left: .25rem; }
+    .device-form input.mono { font-family: ui-monospace, monospace; min-width: 220px; }
+    input.mono { font-family: ui-monospace, monospace; min-width: 220px; }
     .warn { color: #a60; }
+    .error { background: #ffebee; border: 1px solid #e57373; padding: .75rem; margin: 1rem 0; }
   </style>
 </head>
 <body>
@@ -30,6 +33,10 @@
   <h1>Панель</h1>
   <p class="muted">Пауза {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек только между СМС подряд; первая после простоя — без задержки</p>
 
+  {% if device_error %}
+  <div class="error">{{ device_error }}</div>
+  {% endif %}
+
   <ul>
     <li>В очереди: <strong>{{ stats.queued or 0 }}</strong></li>
     <li>Отправлено (всего в БД): <strong>{{ stats.sent_today or 0 }}</strong></li>
@@ -38,9 +45,9 @@
   </ul>
 
   <h2>Устройства (round-robin)</h2>
-  <p class="muted">Логин и пароль для каждого телефона — в приложении SMS Gateway (Cloud Server), после подключения к Private Server. Они генерируются автоматически и у каждого телефона свои.</p>
+  <p class="muted">Gateway ID копируйте с телефона посимвольно — легко перепутать <code>I</code>, <code>l</code> и <code>1</code>.</p>
   <table>
-    <tr><th>Имя</th><th>Gateway ID</th><th>Логин</th><th>Номер</th><th>Вкл</th><th>Последняя отправка</th><th></th></tr>
+    <tr><th>Имя</th><th>Gateway ID</th><th>Логин</th><th>Номер</th><th>Порядок</th><th>Вкл</th><th>Последняя отправка</th><th></th></tr>
     {% for d in devices %}
     <tr>
       <td>{{ d.name }}</td>
@@ -53,6 +60,7 @@
         {% endif %}
       </td>
       <td>{{ d.phone_label }}</td>
+      <td>{{ d.sort_order }}</td>
       <td>{{ 'да' if d.enabled else 'нет' }}</td>
       <td>{{ d.last_sent_at or '—' }}</td>
       <td>
@@ -62,16 +70,24 @@
       </td>
     </tr>
     <tr>
-      <td colspan="7">
-        <form class="cred-form" method="post" action="/admin/devices/{{ d.id }}/credentials">
-          <label>Логин Gateway <input name="gateway_username" value="{{ d.gateway_username }}" required size="12"></label>
-          <label>Пароль <input name="gateway_password" type="password" placeholder="{% if d.gateway_password %}оставьте пустым, чтобы не менять{% else %}обязателен{% endif %}" size="16"></label>
-          <button type="submit">Сохранить учётку</button>
+      <td colspan="8">
+        <form class="device-form" method="post" action="/admin/devices/{{ d.id }}/update">
+          <div>
+            <label>Имя <input name="name" value="{{ d.name }}" required size="14"></label>
+            <label>Gateway ID <input class="mono" name="gateway_device_id" value="{{ d.gateway_device_id }}" required></label>
+            <label>Подпись номера <input name="phone_label" value="{{ d.phone_label }}" placeholder="+7..." size="14"></label>
+            <label>Порядок <input name="sort_order" type="number" value="{{ d.sort_order }}" style="width:4rem"></label>
+          </div>
+          <div>
+            <label>Логин Gateway <input name="gateway_username" value="{{ d.gateway_username }}" required size="12"></label>
+            <label>Пароль <input name="gateway_password" type="password" placeholder="{% if d.gateway_password %}пусто = не менять{% else %}обязателен{% endif %}" size="18"></label>
+            <button type="submit">Сохранить устройство</button>
+          </div>
         </form>
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7">Устройств нет — добавьте ниже</td></tr>
+    <tr><td colspan="8">Устройств нет — добавьте ниже</td></tr>
     {% endfor %}
   </table>
 
@@ -79,7 +95,7 @@
   <form method="post" action="/admin/devices">
     <p>
       <label>Имя <input name="name" required placeholder="phone-1"></label>
-      <label>Gateway device ID <input name="gateway_device_id" required></label>
+      <label>Gateway device ID <input name="gateway_device_id" required class="mono"></label>
       <label>Подпись номера <input name="phone_label" placeholder="+7..."></label>
       <label>Порядок <input name="sort_order" type="number" value="0"></label>
     </p>

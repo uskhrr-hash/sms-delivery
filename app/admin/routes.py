@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -78,10 +79,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
         ),
     }
     devices = db.scalars(select(Device).order_by(Device.sort_order, Device.id)).all()
+    device_error = request.session.pop('device_error', None)
     return templates.TemplateResponse(
         request,
         'dashboard.html',
-        {'stats': stats, 'devices': devices, 'settings': get_settings()},
+        {'stats': stats, 'devices': devices, 'settings': get_settings(), 'device_error': device_error},
     )
 
 
@@ -109,19 +111,35 @@ def add_device(
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
-@router.post('/devices/{device_id}/credentials', dependencies=[Depends(require_admin)])
-def update_device_credentials(
+@router.post('/devices/{device_id}/update', dependencies=[Depends(require_admin)])
+def update_device(
+    request: Request,
     device_id: int,
     db: Session = Depends(get_db),
+    name: str = Form(...),
+    gateway_device_id: str = Form(...),
     gateway_username: str = Form(...),
     gateway_password: str = Form(''),
+    phone_label: str = Form(''),
+    sort_order: int = Form(0),
 ) -> RedirectResponse:
     device = db.get(Device, device_id)
-    if device:
-        device.gateway_username = gateway_username.strip()
-        if gateway_password.strip():
-            device.gateway_password = gateway_password.strip()
+    if not device:
+        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+    device.name = name.strip()
+    device.gateway_device_id = gateway_device_id.strip()
+    device.gateway_username = gateway_username.strip()
+    if gateway_password.strip():
+        device.gateway_password = gateway_password.strip()
+    device.phone_label = phone_label.strip()
+    device.sort_order = sort_order
+    try:
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        request.session['device_error'] = (
+            f'Не удалось сохранить «{name.strip()}»: имя или Gateway ID уже заняты'
+        )
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
