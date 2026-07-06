@@ -97,7 +97,16 @@ async def process_one_message() -> bool:
             db.commit()
             return True
 
-        client = SmsGateClient()
+        if not device.gateway_username or not device.gateway_password:
+            msg.status = MessageStatus.QUEUED
+            msg.last_error = f'У устройства «{device.name}» не заданы логин/пароль Gateway (админка)'
+            db.commit()
+            return True
+
+        client = SmsGateClient(
+            username=device.gateway_username,
+            password=device.gateway_password,
+        )
         try:
             result = await client.send_text(
                 phone=msg.phone,

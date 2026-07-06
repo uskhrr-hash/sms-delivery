@@ -32,6 +32,25 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _migrate_devices_gateway_credentials() -> None:
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if 'devices' not in insp.get_table_names():
+        return
+    cols = {c['name'] for c in insp.get_columns('devices')}
+    statements: list[str] = []
+    if 'gateway_username' not in cols:
+        statements.append("ALTER TABLE devices ADD COLUMN gateway_username VARCHAR(64) DEFAULT ''")
+    if 'gateway_password' not in cols:
+        statements.append("ALTER TABLE devices ADD COLUMN gateway_password VARCHAR(128) DEFAULT ''")
+    if not statements:
+        return
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
+
+
 def init_db() -> None:
     from app import models  # noqa: F401
 
@@ -40,3 +59,4 @@ def init_db() -> None:
 
         Path('data').mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    _migrate_devices_gateway_credentials()

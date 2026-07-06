@@ -14,11 +14,14 @@ class SmsGateError(Exception):
 class SmsGateClient:
     """Клиент SMS Gateway for Android (Private Server)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, username: str | None = None, password: str | None = None) -> None:
         settings = get_settings()
         base = settings.smsgate_base_url.rstrip('/')
         self._api_base = f'{base}/api/3rdparty/v1'
-        self._auth = (settings.smsgate_username, settings.smsgate_password)
+        self._auth = (
+            username if username is not None else settings.smsgate_username,
+            password if password is not None else settings.smsgate_password,
+        )
         self._timeout = 30.0
 
     async def send_text(

@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <title>SMS Delivery — панель</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
     nav a { margin-right: 1rem; }
     table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-    th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; }
+    th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; }
     .muted { color: #666; font-size: .9rem; }
     form.inline { display: inline; }
+    .cred-form { margin: .25rem 0 0; font-size: .9rem; }
+    .cred-form label { display: inline-block; margin-right: .5rem; }
+    .cred-form input { margin-left: .25rem; }
+    .warn { color: #a60; }
   </style>
 </head>
 <body>
@@ -34,12 +38,20 @@
   </ul>
 
   <h2>Устройства (round-robin)</h2>
+  <p class="muted">Логин и пароль для каждого телефона — в приложении SMS Gateway (Cloud Server), после подключения к Private Server. Они генерируются автоматически и у каждого телефона свои.</p>
   <table>
-    <tr><th>Имя</th><th>Gateway ID</th><th>Номер</th><th>Вкл</th><th>Последняя отправка</th><th></th></tr>
+    <tr><th>Имя</th><th>Gateway ID</th><th>Логин</th><th>Номер</th><th>Вкл</th><th>Последняя отправка</th><th></th></tr>
     {% for d in devices %}
     <tr>
       <td>{{ d.name }}</td>
       <td><code>{{ d.gateway_device_id }}</code></td>
+      <td>
+        {% if d.gateway_username %}
+          <code>{{ d.gateway_username }}</code>
+        {% else %}
+          <span class="warn">не задан</span>
+        {% endif %}
+      </td>
       <td>{{ d.phone_label }}</td>
       <td>{{ 'да' if d.enabled else 'нет' }}</td>
       <td>{{ d.last_sent_at or '—' }}</td>
@@ -49,17 +61,32 @@
         </form>
       </td>
     </tr>
+    <tr>
+      <td colspan="7">
+        <form class="cred-form" method="post" action="/admin/devices/{{ d.id }}/credentials">
+          <label>Логин Gateway <input name="gateway_username" value="{{ d.gateway_username }}" required size="12"></label>
+          <label>Пароль <input name="gateway_password" type="password" placeholder="{% if d.gateway_password %}оставьте пустым, чтобы не менять{% else %}обязателен{% endif %}" size="16"></label>
+          <button type="submit">Сохранить учётку</button>
+        </form>
+      </td>
+    </tr>
     {% else %}
-    <tr><td colspan="6">Устройств нет — добавьте ниже (ID смотрите в SMS Gateway)</td></tr>
+    <tr><td colspan="7">Устройств нет — добавьте ниже</td></tr>
     {% endfor %}
   </table>
 
   <h3>Добавить устройство</h3>
   <form method="post" action="/admin/devices">
-    <label>Имя <input name="name" required placeholder="phone-1"></label>
-    <label>Gateway device ID <input name="gateway_device_id" required></label>
-    <label>Подпись номера <input name="phone_label" placeholder="+7..."></label>
-    <label>Порядок <input name="sort_order" type="number" value="0"></label>
+    <p>
+      <label>Имя <input name="name" required placeholder="phone-1"></label>
+      <label>Gateway device ID <input name="gateway_device_id" required></label>
+      <label>Подпись номера <input name="phone_label" placeholder="+7..."></label>
+      <label>Порядок <input name="sort_order" type="number" value="0"></label>
+    </p>
+    <p>
+      <label>Логин Gateway <input name="gateway_username" required placeholder="A1B2C3"></label>
+      <label>Пароль Gateway <input name="gateway_password" type="password" required></label>
+    </p>
     <button type="submit">Добавить</button>
   </form>
 </body>

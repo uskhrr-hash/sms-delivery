@@ -53,7 +53,23 @@ def collect_checks(db: Session) -> list[CheckResult]:
             )
         )
     else:
-        results.append(CheckResult('Телефоны', True, f'Настроено устройств: {devices_on}'))
+        without_creds = db.scalars(
+            select(Device).where(
+                Device.enabled.is_(True),
+                (Device.gateway_username == '') | (Device.gateway_password == ''),
+            )
+        ).all()
+        if without_creds:
+            names = ', '.join(d.name for d in without_creds)
+            results.append(
+                CheckResult(
+                    'Телефоны',
+                    False,
+                    f'Без логина/пароля Gateway: {names}',
+                )
+            )
+        else:
+            results.append(CheckResult('Телефоны', True, f'Настроено устройств: {devices_on}'))
 
     gw_url = settings.smsgate_base_url.rstrip('/') + '/health'
     try:
@@ -69,7 +85,20 @@ def collect_checks(db: Session) -> list[CheckResult]:
         results.append(CheckResult('SMS Gateway', False, str(e)))
 
     try:
-        gate = SmsGateClient()
+        probe = db.scalar(
+            select(Device)
+            .where(
+                Device.enabled.is_(True),
+                Device.gateway_username != '',
+                Device.gateway_password != '',
+            )
+            .order_by(Device.sort_order, Device.id)
+            .limit(1)
+        )
+        if probe:
+            gate = SmsGateClient(username=probe.gateway_username, password=probe.gateway_password)
+        else:
+            gate = SmsGateClient()
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(f'{gate._api_base}/devices', auth=gate._auth)
         if resp.status_code >= 400:

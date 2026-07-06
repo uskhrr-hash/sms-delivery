@@ -90,6 +90,8 @@ def add_device(
     db: Session = Depends(get_db),
     name: str = Form(...),
     gateway_device_id: str = Form(...),
+    gateway_username: str = Form(...),
+    gateway_password: str = Form(...),
     phone_label: str = Form(''),
     sort_order: int = Form(0),
 ) -> RedirectResponse:
@@ -97,11 +99,29 @@ def add_device(
         Device(
             name=name.strip(),
             gateway_device_id=gateway_device_id.strip(),
+            gateway_username=gateway_username.strip(),
+            gateway_password=gateway_password.strip(),
             phone_label=phone_label.strip(),
             sort_order=sort_order,
         )
     )
     db.commit()
+    return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+
+
+@router.post('/devices/{device_id}/credentials', dependencies=[Depends(require_admin)])
+def update_device_credentials(
+    device_id: int,
+    db: Session = Depends(get_db),
+    gateway_username: str = Form(...),
+    gateway_password: str = Form(''),
+) -> RedirectResponse:
+    device = db.get(Device, device_id)
+    if device:
+        device.gateway_username = gateway_username.strip()
+        if gateway_password.strip():
+            device.gateway_password = gateway_password.strip()
+        db.commit()
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
