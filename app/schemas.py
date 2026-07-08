@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models import MessageStatus
+from app.models import MessageStatus, DeliveryStatus
 
 
 def normalize_phone(phone: str) -> str:
@@ -43,13 +43,17 @@ class SendMessageRequest(BaseModel):
 class MessageResponse(BaseModel):
     id: str
     status: MessageStatus
+    delivery_status: DeliveryStatus
     phone: str
     source: str
     ref_id: str
     device_id: int | None
     created_at: datetime
     sent_at: datetime | None
+    delivered_at: datetime | None
     last_error: str | None
+    delivery_error: str | None
+    callback_at: datetime | None
 
     model_config = {'from_attributes': True}
 

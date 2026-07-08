@@ -198,6 +198,19 @@ def add_client(
     return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
 
 
+@router.post('/clients/{client_id}/callback', dependencies=[Depends(require_admin)])
+def update_client_callback(
+    client_id: int,
+    db: Session = Depends(get_db),
+    callback_url: str = Form(''),
+) -> RedirectResponse:
+    client = db.get(ApiClient, client_id)
+    if client:
+        client.callback_url = callback_url.strip()
+        db.commit()
+    return RedirectResponse('/admin/clients', status.HTTP_303_SEE_OTHER)
+
+
 @router.post('/clients/{client_id}/regenerate', dependencies=[Depends(require_admin)])
 def regenerate_client_key(
     request: Request,

@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.gateway.client import SmsGateClient, SmsGateError
 from app.models import Device, MessageStatus, OutboundMessage
+from app.services.delivery_callbacks import mark_delivery_failed
 
 logger = logging.getLogger(__name__)
 
@@ -118,18 +119,23 @@ async def process_one_message() -> bool:
             msg.device_id = device.id
             msg.sent_at = datetime.now(UTC)
             msg.last_error = None
-            msg.gateway_message_id = str(result.get('id') or result.get('messageId') or '')
+            msg.gateway_message_id = str(result.get('id') or result.get('messageId') or msg.id)
             device.last_sent_at = msg.sent_at
+            db.commit()
             logger.info('SMS sent id=%s phone=%s device=%s', msg.id, msg.phone, device.name)
         except SmsGateError as e:
             settings = get_settings()
+            err = str(e)
             if msg.attempts >= settings.max_send_attempts:
                 msg.status = MessageStatus.FAILED
+                msg.last_error = err
+                db.commit()
+                mark_delivery_failed(db, msg, error=err, callback_event='delivery.failed')
             else:
                 msg.status = MessageStatus.QUEUED
-            msg.last_error = str(e)
+                msg.last_error = err
+                db.commit()
             logger.warning('SMS send failed id=%s: %s', msg.id, e)
-        db.commit()
         return True
     finally:
         db.close()

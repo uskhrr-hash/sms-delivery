@@ -149,26 +149,80 @@ Authorization: Bearer ВАШ_API_КЛЮЧ
 {
   "id": "e10ec282-d079-42d8-852c-5edd55c805c7",
   "status": "sent",
+  "delivery_status": "delivered",
   "phone": "79991234567",
   "source": "shop",
   "ref_id": "123",
   "device_id": 1,
   "created_at": "2026-07-05T12:09:30+00:00",
   "sent_at": "2026-07-05T12:09:39+00:00",
-  "last_error": null
+  "delivered_at": "2026-07-05T12:09:45+00:00",
+  "last_error": null,
+  "delivery_error": null,
+  "callback_at": "2026-07-05T12:09:45+00:00"
 }
 ```
 
-### Статусы
+### Статусы `status` (очередь / API)
 
 | status | Значение |
 |--------|----------|
 | `queued` | В очереди, ждёт отправки |
 | `sending` | В процессе отправки |
-| `sent` | Передано в SMS Gateway (телефон отправил в сеть) |
-| `failed` | Не удалось после нескольких попыток; смотрите `last_error` |
+| `sent` | Задача передана на телефон через SMS Gateway |
+| `failed` | Не удалось отправить (API, нет телефона и т.д.) |
+
+### Статусы `delivery_status` (телефон / оператор)
+
+| delivery_status | Значение |
+|-----------------|----------|
+| `pending` | Ждём отчёт с телефона |
+| `sent_to_carrier` | Телефон передал оператору (`sms:sent`) |
+| `delivered` | Доставлено абоненту (`sms:delivered`) |
+| `failed` | Сбой на телефоне или модеме (`sms:failed`) — смотрите `delivery_error` |
 
 Ошибки: **404** — неверный `id`.
+
+---
+
+## Callback на ваш сайт (booking и др.)
+
+В админке sms-delivery для клиента укажите **Callback URL**.  
+При финальном исходе sms-delivery сделает **POST** на этот адрес (один раз на сообщение):
+
+| event | Когда |
+|-------|--------|
+| `delivery.delivered` | Абонент получил СМС |
+| `delivery.failed` | Сбой на телефоне, модеме или при отправке в Gateway |
+
+Заголовок (если задан `CALLBACK_SECRET` на сервере):
+
+```http
+X-SMS-Delivery-Secret: ваш-секрет
+Content-Type: application/json
+```
+
+Тело запроса:
+
+```json
+{
+  "event": "delivery.failed",
+  "message_id": "e10ec282-d079-42d8-852c-5edd55c805c7",
+  "phone": "79991234567",
+  "source": "booking",
+  "ref_id": "4521",
+  "idempotency_key": "booking-4521-confirmed",
+  "status": "failed",
+  "delivery_status": "failed",
+  "last_error": null,
+  "delivery_error": "RESULT_RIL_MODEM_ERR",
+  "device_id": 2,
+  "sent_at": "2026-07-06T08:00:00+00:00",
+  "delivered_at": null
+}
+```
+
+Ваш сайт должен ответить **HTTP 200**. Тогда booking может, например, отправить СМС через SMS-центр при `delivery.failed`.
 
 ---
 

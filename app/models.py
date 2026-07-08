@@ -17,6 +17,13 @@ class MessageStatus(str, enum.Enum):
     FAILED = 'failed'
 
 
+class DeliveryStatus(str, enum.Enum):
+    PENDING = 'pending'
+    SENT_TO_CARRIER = 'sent_to_carrier'
+    DELIVERED = 'delivered'
+    FAILED = 'failed'
+
+
 class Device(Base):
     __tablename__ = 'devices'
 
@@ -49,6 +56,12 @@ class OutboundMessage(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
     gateway_message_id: Mapped[str | None] = mapped_column(String(128))
+    delivery_status: Mapped[DeliveryStatus] = mapped_column(
+        Enum(DeliveryStatus, native_enum=False), default=DeliveryStatus.PENDING, index=True
+    )
+    delivery_error: Mapped[str | None] = mapped_column(Text)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    callback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -76,5 +89,6 @@ class ApiClient(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True)
     api_key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    callback_url: Mapped[str] = mapped_column(String(500), default='')
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

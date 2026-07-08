@@ -4,11 +4,13 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import IncomingMessage
 from app.schemas import IncomingWebhookPayload
+from app.services.delivery_events import handle_gateway_delivery_event
 
 router = APIRouter(prefix='/api/v1/webhooks', tags=['webhooks'])
 
@@ -53,3 +55,10 @@ async def incoming_sms(request: Request, db: Session = Depends(get_db)) -> dict:
     db.add(row)
     db.commit()
     return {'ok': True}
+
+
+@router.post('/delivery')
+async def delivery_event(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Статусы исходящих: sms:sent, sms:delivered, sms:failed."""
+    data = await request.json()
+    return handle_gateway_delivery_event(db, data)

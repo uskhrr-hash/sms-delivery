@@ -62,11 +62,20 @@ class SmsGateClient:
             return data
         return data.get('items') or data.get('devices') or []
 
-    async def register_incoming_webhook(self, *, url: str, device_id: str | None = None) -> None:
+    async def register_webhook(
+        self,
+        *,
+        url: str,
+        event: str = 'sms:received',
+        webhook_id: str | None = None,
+        device_id: str | None = None,
+    ) -> None:
         body: dict[str, Any] = {
             'url': url,
-            'event': 'sms:received',
+            'event': event,
         }
+        if webhook_id:
+            body['id'] = webhook_id
         if device_id:
             body['device_id'] = device_id
         async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -77,3 +86,7 @@ class SmsGateClient:
             )
         if resp.status_code >= 400:
             raise SmsGateError(f'Webhook register HTTP {resp.status_code}: {resp.text[:500]}')
+
+    async def register_incoming_webhook(self, *, url: str, device_id: str | None = None) -> None:
+        await self.register_webhook(url=url, event='sms:received', device_id=device_id)
+

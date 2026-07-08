@@ -16,13 +16,14 @@ class Settings(BaseSettings):
     admin_user: str = 'admin'
     admin_password: str = 'admin'
 
-    send_delay_min: int = 60
-    send_delay_max: int = 180
+    send_delay_min: int = 3
+    send_delay_max: int = 4
 
     smsgate_base_url: str = 'https://localhost'
     smsgate_username: str = ''
     smsgate_password: str = ''
     public_base_url: str = 'http://localhost:8000'
+    callback_secret: str = ''
 
     worker_poll_sec: float = 3.0
     max_send_attempts: int = 3

@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <title>Исходящие — SMS Delivery</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
     nav a { margin-right: 1rem; }
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     th, td { border: 1px solid #ddd; padding: .35rem .5rem; vertical-align: top; }
-    .err { color: #b00020; max-width: 200px; }
+    .err { color: #b00020; max-width: 180px; word-break: break-word; }
+    .ok { color: #2e7d32; }
   </style>
 </head>
 <body>
@@ -21,17 +22,20 @@
   <h1>Исходящие (последние 200)</h1>
   <table>
     <tr>
-      <th>Время</th><th>Статус</th><th>Телефон</th><th>Текст</th><th>Источник</th><th>Устр.</th><th>Ошибка</th>
+      <th>Время</th><th>Статус</th><th>Доставка</th><th>Телефон</th><th>Текст</th>
+      <th>Источник</th><th>Устр.</th><th>Ошибка</th><th>Callback</th>
     </tr>
     {% for m in messages %}
     <tr>
       <td>{{ m.created_at }}</td>
       <td>{{ m.status.value }}</td>
+      <td class="{{ 'ok' if m.delivery_status.value == 'delivered' else '' }}">{{ m.delivery_status.value }}</td>
       <td>{{ m.phone }}</td>
-      <td>{{ m.text[:120] }}{% if m.text|length > 120 %}…{% endif %}</td>
+      <td>{{ m.text[:80] }}{% if m.text|length > 80 %}…{% endif %}</td>
       <td>{{ m.source }} / {{ m.ref_id }}</td>
       <td>{{ m.device_id or '—' }}</td>
-      <td class="err">{{ m.last_error or '' }}</td>
+      <td class="err">{{ m.delivery_error or m.last_error or '' }}</td>
+      <td>{{ 'да' if m.callback_at else '—' }}</td>
     </tr>
     {% endfor %}
   </table>
