@@ -29,7 +29,7 @@
     <tr>
       <td>{{ m.created_at }}</td>
       <td>{{ m.status.value }}</td>
-      <td class="{{ 'ok' if m.delivery_status.value == 'delivered' else '' }}">{{ m.delivery_status.value }}</td>
+      <td class="{{ 'ok' if m.delivery_status and m.delivery_status.value == 'delivered' else '' }}">{{ m.delivery_status.value if m.delivery_status else 'pending' }}</td>
       <td>{{ m.phone }}</td>
       <td>{{ m.text[:80] }}{% if m.text|length > 80 %}…{% endif %}</td>
       <td>{{ m.source }} / {{ m.ref_id }}</td>

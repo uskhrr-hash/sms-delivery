@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -55,13 +58,13 @@ def _migrate_schema() -> None:
 
     if 'outbound_messages' in insp.get_table_names():
         cols = {c['name'] for c in insp.get_columns('outbound_messages')}
-        ts_type = 'TIMESTAMP WITH TIME ZONE'
-        if get_settings().database_url.startswith('sqlite'):
-            ts_type = 'DATETIME'
+        ts_type = 'TIMESTAMPTZ' if not get_settings().database_url.startswith('sqlite') else 'DATETIME'
+        is_pg = not get_settings().database_url.startswith('sqlite')
+        added_delivery_status = 'delivery_status' not in cols
         statements = []
-        if 'delivery_status' not in cols:
+        if added_delivery_status:
             statements.append(
-                "ALTER TABLE outbound_messages ADD COLUMN delivery_status VARCHAR(32) DEFAULT 'pending'"
+                "ALTER TABLE outbound_messages ADD COLUMN delivery_status VARCHAR(32) NOT NULL DEFAULT 'pending'"
             )
         if 'delivery_error' not in cols:
             statements.append('ALTER TABLE outbound_messages ADD COLUMN delivery_error TEXT')
@@ -72,6 +75,23 @@ def _migrate_schema() -> None:
         for stmt in statements:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
+        if is_pg and (added_delivery_status or 'delivery_status' in cols):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        'ALTER TABLE outbound_messages '
+                        'ALTER COLUMN delivery_status TYPE VARCHAR(32) '
+                        'USING lower(delivery_status::text)'
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE outbound_messages SET delivery_status = 'pending' "
+                        "WHERE delivery_status IS NULL OR delivery_status = ''"
+                    )
+                )
+            with engine.begin() as conn:
+                conn.execute(text('DROP TYPE IF EXISTS deliverystatus'))
 
 
 def init_db() -> None:
@@ -82,4 +102,8 @@ def init_db() -> None:
 
         Path('data').mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
-    _migrate_schema()
+    try:
+        _migrate_schema()
+    except Exception:
+        logger.exception('DB schema migration failed')
+        raise
