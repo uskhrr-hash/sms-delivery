@@ -206,6 +206,55 @@ def update_device(
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
+@router.post('/devices/{device_id}/add-sibling-sim', dependencies=[Depends(require_admin)])
+def add_sibling_sim(
+    request: Request,
+    device_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Вторая строка очереди для другого слота того же телефона (тот же Gateway ID)."""
+    device = db.get(Device, device_id)
+    if not device or device.sim_number not in (1, 2):
+        request.session['device_error'] = (
+            'Сначала укажите SIM 1 или 2 (не auto), затем добавьте пару.'
+        )
+        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+    other_sim = 2 if device.sim_number == 1 else 1
+    exists = db.scalar(
+        select(Device.id).where(
+            Device.gateway_device_id == device.gateway_device_id,
+            Device.sim_number == other_sim,
+        )
+    )
+    if exists:
+        request.session['device_error'] = f'Строка для SIM {other_sim} с этим Gateway ID уже есть'
+        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+    base = device.name
+    if base.endswith('-sim1') or base.endswith('-sim2'):
+        base = base.rsplit('-sim', 1)[0]
+    new_name = f'{base}-sim{other_sim}'
+    if db.scalar(select(Device.id).where(Device.name == new_name)):
+        new_name = f'{new_name}-{device.id}'
+    db.add(
+        Device(
+            name=new_name,
+            gateway_device_id=device.gateway_device_id,
+            gateway_username=device.gateway_username,
+            gateway_password=device.gateway_password,
+            phone_label='',
+            sort_order=device.sort_order + 1,
+            sim_number=other_sim,
+            enabled=False,
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        request.session['device_error'] = 'Не удалось создать пару: имя занято'
+    return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+
+
 @router.post('/devices/{device_id}/toggle', dependencies=[Depends(require_admin)])
 def toggle_device(device_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
     device = db.get(Device, device_id)
