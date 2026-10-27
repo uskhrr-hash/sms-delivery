@@ -101,30 +101,84 @@
   </table>
 
   <h3>Добавить устройство</h3>
-  <form method="post" action="/admin/devices">
+  <form method="post" action="/admin/devices" id="add-device-form">
     <p>
-      <label>Имя (SIM 1) <input name="name" required placeholder="C61_office"></label>
-      <label>Имя SIM 2 <input name="name_sim2" placeholder="C61_office-sim2" size="16"></label>
-      <label>Gateway device ID <input name="gateway_device_id" required class="mono"></label>
-      <label>Порядок SIM 1 <input name="sort_order" type="number" value="0" style="width:4rem"></label>
-    </p>
-    <p>
-      <label>Номер SIM 1 <input name="phone_label" placeholder="+7..."></label>
-      <label>Номер SIM 2 <input name="phone_label_sim2" placeholder="+7... (две строки в очереди)"></label>
-    </p>
-    <p class="muted">Если заполнен <strong>номер SIM 2</strong>, создаются две записи (SIM 1 и SIM 2), один Gateway ID и логин. Иначе — одна запись, SIM выбирается ниже.</p>
-    <p>
-      <label>Одна SIM
-        <select name="sim_number">
-          <option value="auto">auto (приложение)</option>
+      <label>Слотов SIM в телефоне
+        <select name="sim_slots" id="sim_slots">
           <option value="1">1</option>
           <option value="2">2</option>
         </select>
       </label>
+      <label>Gateway device ID <input name="gateway_device_id" required class="mono"></label>
+      <label>Порядок (SIM 1) <input name="sort_order" type="number" value="0" style="width:4rem"></label>
+    </p>
+
+    <div id="add-single-sim">
+      <p>
+        <label>Имя <input name="name" required placeholder="C61_office"></label>
+        <label>Номер SIM
+          <select name="sim_number">
+            <option value="auto">auto (приложение)</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </label>
+        <label>Номер (справка) <input name="phone_label" placeholder="+7..."></label>
+      </p>
+    </div>
+
+    <div id="add-dual-sim" hidden>
+      <p>
+        <label>Имя SIM 1 <input data-field="name" placeholder="C61_office" size="14"></label>
+        <label>Имя SIM 2 <input name="name_sim2" placeholder="C61_office-sim2" size="16"></label>
+      </p>
+      <p>
+        <label>Номер SIM 1 <input name="phone_label" placeholder="+7..."></label>
+        <label>Номер SIM 2 <input name="phone_label_sim2" placeholder="+7..."></label>
+      </p>
+      <p class="muted">Создаются две строки в очереди (SIM 1 и SIM 2), один Gateway ID и логин.</p>
+    </div>
+
+    <p>
       <label>Логин Gateway <input name="gateway_username" required placeholder="A1B2C3"></label>
       <label>Пароль Gateway <input name="gateway_password" type="password" required></label>
     </p>
     <button type="submit">Добавить</button>
   </form>
+  <script>
+    (function () {
+      const slots = document.getElementById('sim_slots');
+      const single = document.getElementById('add-single-sim');
+      const dual = document.getElementById('add-dual-sim');
+      const nameSingle = single.querySelector('input[name="name"]');
+      const nameDual = dual.querySelector('input[data-field="name"]');
+
+      function setBlockEnabled(block, on) {
+        block.hidden = !on;
+        block.querySelectorAll('input, select, textarea').forEach(function (el) {
+          el.disabled = !on;
+        });
+      }
+
+      function sync() {
+        const isDual = slots.value === '2';
+        setBlockEnabled(single, !isDual);
+        setBlockEnabled(dual, isDual);
+        if (isDual) {
+          nameSingle.removeAttribute('name');
+          nameDual.setAttribute('name', 'name');
+          nameDual.required = true;
+        } else {
+          nameDual.removeAttribute('name');
+          nameDual.required = false;
+          nameSingle.setAttribute('name', 'name');
+          nameSingle.required = true;
+        }
+      }
+
+      slots.addEventListener('change', sync);
+      sync();
+    })();
+  </script>
 </body>
 </html>

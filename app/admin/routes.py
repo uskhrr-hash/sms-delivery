@@ -109,22 +109,17 @@ def add_device(
     phone_label_sim2: str = Form(''),
     name_sim2: str = Form(''),
     sort_order: int = Form(0),
+    sim_slots: str = Form('1'),
     sim_number: str = Form('auto'),
 ) -> RedirectResponse:
-    try:
-        sim = parse_sim_number(sim_number)
-    except ValueError:
-        request.session['device_error'] = 'SIM: укажите auto, 1 или 2'
-        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
-
     base_name = name.strip()
     gw_id = gateway_device_id.strip()
     gw_user = gateway_username.strip()
     gw_pass = gateway_password.strip()
-    label2 = phone_label_sim2.strip()
+    dual = sim_slots.strip() == '2'
 
-    if label2:
-        second_name = (name_sim2.strip() or f'{base_name}-sim2')
+    if dual:
+        second_name = name_sim2.strip() or f'{base_name}-sim2'
         db.add(
             Device(
                 name=base_name,
@@ -142,12 +137,17 @@ def add_device(
                 gateway_device_id=gw_id,
                 gateway_username=gw_user,
                 gateway_password=gw_pass,
-                phone_label=label2,
+                phone_label=phone_label_sim2.strip(),
                 sort_order=sort_order + 1,
                 sim_number=2,
             )
         )
     else:
+        try:
+            sim = parse_sim_number(sim_number)
+        except ValueError:
+            request.session['device_error'] = 'SIM: укажите auto, 1 или 2'
+            return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
         db.add(
             Device(
                 name=base_name,
