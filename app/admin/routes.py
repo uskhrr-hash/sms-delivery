@@ -106,6 +106,8 @@ def add_device(
     gateway_username: str = Form(...),
     gateway_password: str = Form(...),
     phone_label: str = Form(''),
+    phone_label_sim2: str = Form(''),
+    name_sim2: str = Form(''),
     sort_order: int = Form(0),
     sim_number: str = Form('auto'),
 ) -> RedirectResponse:
@@ -114,18 +116,54 @@ def add_device(
     except ValueError:
         request.session['device_error'] = 'SIM: укажите auto, 1 или 2'
         return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
-    db.add(
-        Device(
-            name=name.strip(),
-            gateway_device_id=gateway_device_id.strip(),
-            gateway_username=gateway_username.strip(),
-            gateway_password=gateway_password.strip(),
-            phone_label=phone_label.strip(),
-            sort_order=sort_order,
-            sim_number=sim,
+
+    base_name = name.strip()
+    gw_id = gateway_device_id.strip()
+    gw_user = gateway_username.strip()
+    gw_pass = gateway_password.strip()
+    label2 = phone_label_sim2.strip()
+
+    if label2:
+        second_name = (name_sim2.strip() or f'{base_name}-sim2')
+        db.add(
+            Device(
+                name=base_name,
+                gateway_device_id=gw_id,
+                gateway_username=gw_user,
+                gateway_password=gw_pass,
+                phone_label=phone_label.strip(),
+                sort_order=sort_order,
+                sim_number=1,
+            )
         )
-    )
-    db.commit()
+        db.add(
+            Device(
+                name=second_name,
+                gateway_device_id=gw_id,
+                gateway_username=gw_user,
+                gateway_password=gw_pass,
+                phone_label=label2,
+                sort_order=sort_order + 1,
+                sim_number=2,
+            )
+        )
+    else:
+        db.add(
+            Device(
+                name=base_name,
+                gateway_device_id=gw_id,
+                gateway_username=gw_user,
+                gateway_password=gw_pass,
+                phone_label=phone_label.strip(),
+                sort_order=sort_order,
+                sim_number=sim,
+            )
+        )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        request.session['device_error'] = 'Не удалось добавить: имя устройства уже занято'
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
