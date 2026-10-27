@@ -31,7 +31,7 @@
   </nav>
 
   <h1>Панель</h1>
-  <p class="muted">Пауза {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек только между СМС подряд; первая после простоя — без задержки</p>
+  <p class="muted">С одного устройства — не чаще 1 СМС в {{ settings.device_send_min_interval_sec }} сек (очередь ждёт). Между СМС подряд при нескольких гейтах: пауза {{ settings.send_delay_min }}–{{ settings.send_delay_max }} сек</p>
 
   {% if device_error %}
   <div class="error">{{ device_error }}</div>

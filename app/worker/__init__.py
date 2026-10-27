@@ -4,7 +4,13 @@ import asyncio
 import logging
 
 from app.config import get_settings
-from app.worker.sender import has_queued_messages, human_delay_seconds, process_one_message
+from app.database import SessionLocal
+from app.worker.sender import (
+    has_queued_messages,
+    human_delay_seconds,
+    process_one_message,
+    seconds_until_any_device_ready,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +18,8 @@ logger = logging.getLogger(__name__)
 async def worker_loop(stop_event: asyncio.Event) -> None:
     settings = get_settings()
     logger.info(
-        'Worker started (delay %s–%s sec between consecutive SMS)',
+        'Worker started (device min interval %ss; chain delay %s–%ss)',
+        settings.device_send_min_interval_sec,
         settings.send_delay_min,
         settings.send_delay_max,
     )
@@ -40,7 +47,25 @@ async def worker_loop(stop_event: asyncio.Event) -> None:
                 chain_active = has_queued_messages()
             else:
                 chain_active = False
-                await asyncio.sleep(settings.worker_poll_sec)
+                if has_queued_messages():
+                    db_wait = SessionLocal()
+                    try:
+                        wait_sec = seconds_until_any_device_ready(
+                            db_wait, float(settings.device_send_min_interval_sec)
+                        )
+                    finally:
+                        db_wait.close()
+                    if wait_sec is not None and wait_sec > 0:
+                        logger.info('Queue waiting %.0fs for device rate limit', wait_sec)
+                        try:
+                            await asyncio.wait_for(stop_event.wait(), timeout=wait_sec)
+                            break
+                        except asyncio.TimeoutError:
+                            pass
+                    else:
+                        await asyncio.sleep(settings.worker_poll_sec)
+                else:
+                    await asyncio.sleep(settings.worker_poll_sec)
         except Exception:
             logger.exception('Worker error')
             chain_active = False

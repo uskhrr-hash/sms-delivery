@@ -4,7 +4,7 @@ import itertools
 import logging
 import random
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -45,6 +45,49 @@ class DevicePicker:
 device_picker = DevicePicker()
 
 
+def _device_ready_at(last_sent_at: datetime | None, min_interval_sec: float) -> datetime:
+    if last_sent_at is None:
+        return datetime.now(UTC)
+    return last_sent_at + timedelta(seconds=min_interval_sec)
+
+
+def seconds_until_device_ready(last_sent_at: datetime | None, min_interval_sec: float) -> float:
+    ready_at = _device_ready_at(last_sent_at, min_interval_sec)
+    return max(0.0, (ready_at - datetime.now(UTC)).total_seconds())
+
+
+def pick_ready_device(db: Session, min_interval_sec: float) -> Device | None:
+    """Round-robin среди устройств, готовых к отправке (не чаще min_interval_sec с last_sent_at)."""
+    device_picker.refresh(db)
+    ids = device_picker._device_ids
+    if not ids:
+        return None
+    for _ in ids:
+        device_id = device_picker.next_device_id()
+        if device_id is None:
+            return None
+        device = db.get(Device, device_id)
+        if not device or not device.enabled:
+            continue
+        if seconds_until_device_ready(device.last_sent_at, min_interval_sec) <= 0:
+            return device
+    return None
+
+
+def seconds_until_any_device_ready(db: Session, min_interval_sec: float) -> float | None:
+    """
+    Секунды до ближайшего готового устройства.
+    None — нет включённых устройств; 0 — хотя бы одно готово сейчас.
+    """
+    rows = db.scalars(
+        select(Device).where(Device.enabled.is_(True)).order_by(Device.sort_order, Device.id)
+    ).all()
+    if not rows:
+        return None
+    waits = [seconds_until_device_ready(d.last_sent_at, min_interval_sec) for d in rows]
+    return min(waits)
+
+
 def claim_next_message(db: Session) -> OutboundMessage | None:
     msg = db.scalar(
         select(OutboundMessage)
@@ -76,27 +119,21 @@ def has_queued_messages() -> bool:
 
 
 async def process_one_message() -> bool:
-    """Обработать одно сообщение. True — если что-то отправляли/пытались."""
+    """
+    Обработать одно сообщение. True — взяли из очереди и отправили/зафиксировали ошибку.
+    False — очередь пуста или все устройства в паузе (сообщения остаются queued).
+    """
+    settings = get_settings()
+    min_interval = float(settings.device_send_min_interval_sec)
     db = SessionLocal()
     try:
-        device_picker.refresh(db)
+        device = pick_ready_device(db, min_interval)
+        if device is None:
+            return False
+
         msg = claim_next_message(db)
         if not msg:
             return False
-
-        device_db_id = device_picker.next_device_id()
-        if device_db_id is None:
-            msg.status = MessageStatus.QUEUED
-            msg.last_error = 'Нет активных устройств'
-            db.commit()
-            return True
-
-        device = db.get(Device, device_db_id)
-        if not device:
-            msg.status = MessageStatus.QUEUED
-            msg.last_error = 'Устройство не найдено'
-            db.commit()
-            return True
 
         if not device.gateway_username or not device.gateway_password:
             msg.status = MessageStatus.QUEUED
@@ -124,7 +161,6 @@ async def process_one_message() -> bool:
             db.commit()
             logger.info('SMS sent id=%s phone=%s device=%s', msg.id, msg.phone, device.name)
         except SmsGateError as e:
-            settings = get_settings()
             err = str(e)
             if msg.attempts >= settings.max_send_attempts:
                 msg.status = MessageStatus.FAILED

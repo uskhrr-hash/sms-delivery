@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     send_delay_min: int = 3
     send_delay_max: int = 4
+    # Минимальный интервал между отправками с одного устройства (одна SIM / один телефон).
+    device_send_min_interval_sec: int = 60
 
     smsgate_base_url: str = 'https://localhost'
     smsgate_username: str = ''
