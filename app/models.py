@@ -29,10 +29,12 @@ class Device(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
-    gateway_device_id: Mapped[str] = mapped_column(String(128), unique=True)
+    gateway_device_id: Mapped[str] = mapped_column(String(128), index=True)
     gateway_username: Mapped[str] = mapped_column(String(64), default='')
     gateway_password: Mapped[str] = mapped_column(String(128), default='')
     phone_label: Mapped[str] = mapped_column(String(32), default='')
+    # 1 или 2 — явная SIM в SMSGate; None — как настроено в приложении на телефоне.
+    sim_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

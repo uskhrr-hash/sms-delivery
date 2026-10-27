@@ -31,6 +31,7 @@ class SmsGateClient:
         text: str,
         device_id: str,
         message_id: str | None = None,
+        sim_number: int | None = None,
     ) -> dict[str, Any]:
         phone_e164 = f'+{phone}' if not phone.startswith('+') else phone
         body: dict[str, Any] = {
@@ -41,6 +42,8 @@ class SmsGateClient:
         }
         if message_id:
             body['id'] = message_id
+        if sim_number is not None:
+            body['simNumber'] = sim_number
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(

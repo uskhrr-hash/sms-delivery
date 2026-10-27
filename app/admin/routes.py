@@ -20,6 +20,16 @@ router = APIRouter(prefix='/admin', tags=['admin'])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / 'templates'))
 
 
+def parse_sim_number(raw: str) -> int | None:
+    value = raw.strip()
+    if not value or value == 'auto':
+        return None
+    num = int(value)
+    if num not in (1, 2):
+        raise ValueError('sim_number must be 1, 2 or auto')
+    return num
+
+
 def require_admin(request: Request) -> None:
     if not request.session.get('admin'):
         raise HTTPException(status_code=302, headers={'Location': '/admin/login'})
@@ -89,6 +99,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
 
 @router.post('/devices', dependencies=[Depends(require_admin)])
 def add_device(
+    request: Request,
     db: Session = Depends(get_db),
     name: str = Form(...),
     gateway_device_id: str = Form(...),
@@ -96,7 +107,13 @@ def add_device(
     gateway_password: str = Form(...),
     phone_label: str = Form(''),
     sort_order: int = Form(0),
+    sim_number: str = Form('auto'),
 ) -> RedirectResponse:
+    try:
+        sim = parse_sim_number(sim_number)
+    except ValueError:
+        request.session['device_error'] = 'SIM: укажите auto, 1 или 2'
+        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
     db.add(
         Device(
             name=name.strip(),
@@ -105,6 +122,7 @@ def add_device(
             gateway_password=gateway_password.strip(),
             phone_label=phone_label.strip(),
             sort_order=sort_order,
+            sim_number=sim,
         )
     )
     db.commit()
@@ -122,9 +140,15 @@ def update_device(
     gateway_password: str = Form(''),
     phone_label: str = Form(''),
     sort_order: int = Form(0),
+    sim_number: str = Form('auto'),
 ) -> RedirectResponse:
     device = db.get(Device, device_id)
     if not device:
+        return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
+    try:
+        sim = parse_sim_number(sim_number)
+    except ValueError:
+        request.session['device_error'] = 'SIM: укажите auto, 1 или 2'
         return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
     device.name = name.strip()
     device.gateway_device_id = gateway_device_id.strip()
@@ -133,12 +157,13 @@ def update_device(
         device.gateway_password = gateway_password.strip()
     device.phone_label = phone_label.strip()
     device.sort_order = sort_order
+    device.sim_number = sim
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         request.session['device_error'] = (
-            f'Не удалось сохранить «{name.strip()}»: имя или Gateway ID уже заняты'
+            f'Не удалось сохранить «{name.strip()}»: имя уже занято'
         )
     return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 

@@ -151,6 +151,7 @@ async def process_one_message() -> bool:
                 text=msg.text,
                 device_id=device.gateway_device_id,
                 message_id=msg.id,
+                sim_number=device.sim_number,
             )
             msg.status = MessageStatus.SENT
             msg.device_id = device.id

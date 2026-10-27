@@ -43,9 +43,16 @@ def _migrate_schema() -> None:
             statements.append("ALTER TABLE devices ADD COLUMN gateway_username VARCHAR(64) DEFAULT ''")
         if 'gateway_password' not in cols:
             statements.append("ALTER TABLE devices ADD COLUMN gateway_password VARCHAR(128) DEFAULT ''")
+        if 'sim_number' not in cols:
+            statements.append('ALTER TABLE devices ADD COLUMN sim_number INTEGER')
         for stmt in statements:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
+        if get_settings().database_url.startswith('postgresql'):
+            with engine.begin() as conn:
+                conn.execute(
+                    text('ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_gateway_device_id_key')
+                )
 
     if 'api_clients' in insp.get_table_names():
         cols = {c['name'] for c in insp.get_columns('api_clients')}
