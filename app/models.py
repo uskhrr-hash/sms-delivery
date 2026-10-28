@@ -38,6 +38,9 @@ class Device(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # ID центра/магазина на стороне клиента (Booking service_center.id). Пусто — общий пул.
+    bind_center_id: Mapped[str] = mapped_column(String(32), default='', index=True)
+    bind_center_label: Mapped[str] = mapped_column(String(200), default='')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -53,6 +56,7 @@ class OutboundMessage(Base):
     )
     source: Mapped[str] = mapped_column(String(50), default='')
     ref_id: Mapped[str] = mapped_column(String(100), default='')
+    center_id: Mapped[str] = mapped_column(String(32), default='', index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     device_id: Mapped[int | None] = mapped_column(Integer)
     attempts: Mapped[int] = mapped_column(Integer, default=0)

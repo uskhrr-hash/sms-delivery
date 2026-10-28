@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import random
-import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,95 +12,72 @@ from app.database import SessionLocal
 from app.gateway.client import SmsGateClient, SmsGateError
 from app.models import Device, MessageStatus, OutboundMessage
 from app.services.delivery_callbacks import mark_delivery_failed
+from app.services.send_routing import (
+    route_device_picker,
+    seconds_until_device_ready,
+    seconds_until_message_sendable,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class DevicePicker:
-    """Round-robin по включённым устройствам."""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._cycle: itertools.cycle[int] | None = None
-        self._device_ids: list[int] = []
-
-    def refresh(self, db: Session) -> None:
-        rows = db.scalars(
-            select(Device.id).where(Device.enabled.is_(True)).order_by(Device.sort_order, Device.id)
-        ).all()
-        with self._lock:
-            if rows != self._device_ids:
-                self._device_ids = list(rows)
-                self._cycle = itertools.cycle(self._device_ids) if self._device_ids else None
-
-    def next_device_id(self) -> int | None:
-        with self._lock:
-            if not self._cycle:
-                return None
-            return next(self._cycle)
-
-
-device_picker = DevicePicker()
-
-
-def _device_ready_at(last_sent_at: datetime | None, min_interval_sec: float) -> datetime:
-    if last_sent_at is None:
-        return datetime.now(UTC)
-    return last_sent_at + timedelta(seconds=min_interval_sec)
-
-
-def seconds_until_device_ready(last_sent_at: datetime | None, min_interval_sec: float) -> float:
-    ready_at = _device_ready_at(last_sent_at, min_interval_sec)
-    return max(0.0, (ready_at - datetime.now(UTC)).total_seconds())
-
-
-def pick_ready_device(db: Session, min_interval_sec: float) -> Device | None:
-    """Round-robin среди устройств, готовых к отправке (не чаще min_interval_sec с last_sent_at)."""
-    device_picker.refresh(db)
-    ids = device_picker._device_ids
-    if not ids:
-        return None
-    for _ in ids:
-        device_id = device_picker.next_device_id()
-        if device_id is None:
-            return None
-        device = db.get(Device, device_id)
-        if not device or not device.enabled:
+def claim_next_sendable_pair(
+    db: Session, min_interval_sec: float
+) -> tuple[OutboundMessage, Device] | None:
+    """
+    Старейшее сообщение в очереди, для которого есть готовое устройство по правилам center_id.
+    Не блокирует очередь других центров, если у первого сообщения пауза rate-limit.
+    """
+    queued = db.scalars(
+        select(OutboundMessage)
+        .where(OutboundMessage.status == MessageStatus.QUEUED)
+        .order_by(OutboundMessage.created_at)
+        .limit(100)
+    ).all()
+    for candidate in queued:
+        device = route_device_picker.pick_ready(db, candidate.center_id or None, min_interval_sec)
+        if device is None:
             continue
-        if seconds_until_device_ready(device.last_sent_at, min_interval_sec) <= 0:
-            return device
+        msg = db.scalar(
+            select(OutboundMessage)
+            .where(
+                OutboundMessage.id == candidate.id,
+                OutboundMessage.status == MessageStatus.QUEUED,
+            )
+            .with_for_update()
+        )
+        if not msg:
+            continue
+        msg.status = MessageStatus.SENDING
+        msg.attempts += 1
+        db.commit()
+        db.refresh(msg)
+        return msg, device
     return None
 
 
 def seconds_until_any_device_ready(db: Session, min_interval_sec: float) -> float | None:
     """
-    Секунды до ближайшего готового устройства.
-    None — нет включённых устройств; 0 — хотя бы одно готово сейчас.
+    Секунды до ближайшей возможной отправки с учётом маршрутизации.
+    None — нет подходящих устройств для текущей очереди.
     """
-    rows = db.scalars(
-        select(Device).where(Device.enabled.is_(True)).order_by(Device.sort_order, Device.id)
-    ).all()
-    if not rows:
-        return None
-    waits = [seconds_until_device_ready(d.last_sent_at, min_interval_sec) for d in rows]
-    return min(waits)
-
-
-def claim_next_message(db: Session) -> OutboundMessage | None:
-    msg = db.scalar(
+    queued = db.scalars(
         select(OutboundMessage)
         .where(OutboundMessage.status == MessageStatus.QUEUED)
         .order_by(OutboundMessage.created_at)
-        .limit(1)
-        .with_for_update()
-    )
-    if not msg:
+        .limit(100)
+    ).all()
+    if not queued:
         return None
-    msg.status = MessageStatus.SENDING
-    msg.attempts += 1
-    db.commit()
-    db.refresh(msg)
-    return msg
+    waits: list[float] = []
+    for msg in queued:
+        w = seconds_until_message_sendable(db, msg.center_id or None, min_interval_sec)
+        if w is None:
+            continue
+        if w <= 0:
+            return 0.0
+        waits.append(w)
+    return min(waits) if waits else None
 
 
 def has_queued_messages() -> bool:
@@ -121,19 +96,16 @@ def has_queued_messages() -> bool:
 async def process_one_message() -> bool:
     """
     Обработать одно сообщение. True — взяли из очереди и отправили/зафиксировали ошибку.
-    False — очередь пуста или все устройства в паузе (сообщения остаются queued).
+    False — очередь пуста или нет готовых устройств (сообщения остаются queued).
     """
     settings = get_settings()
     min_interval = float(settings.device_send_min_interval_sec)
     db = SessionLocal()
     try:
-        device = pick_ready_device(db, min_interval)
-        if device is None:
+        pair = claim_next_sendable_pair(db, min_interval)
+        if pair is None:
             return False
-
-        msg = claim_next_message(db)
-        if not msg:
-            return False
+        msg, device = pair
 
         if not device.gateway_username or not device.gateway_password:
             msg.status = MessageStatus.QUEUED
@@ -160,7 +132,13 @@ async def process_one_message() -> bool:
             msg.gateway_message_id = str(result.get('id') or result.get('messageId') or msg.id)
             device.last_sent_at = msg.sent_at
             db.commit()
-            logger.info('SMS sent id=%s phone=%s device=%s', msg.id, msg.phone, device.name)
+            logger.info(
+                'SMS sent id=%s phone=%s device=%s center=%s',
+                msg.id,
+                msg.phone,
+                device.name,
+                msg.center_id or '-',
+            )
         except SmsGateError as e:
             err = str(e)
             if msg.attempts >= settings.max_send_attempts:

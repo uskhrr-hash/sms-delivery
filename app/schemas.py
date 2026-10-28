@@ -25,6 +25,19 @@ class SendMessageRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, max_length=200)
     source: str = Field(default='', max_length=50)
     ref_id: str = Field(default='', max_length=100)
+    center_id: str | None = Field(
+        default=None,
+        max_length=32,
+        description='ID центра/магазина у клиента; маршрутизация на привязанный телефон',
+    )
+
+    @field_validator('center_id')
+    @classmethod
+    def validate_center_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        text = str(v).strip()
+        return text if text else None
 
     @field_validator('phone')
     @classmethod
@@ -47,6 +60,7 @@ class MessageResponse(BaseModel):
     phone: str
     source: str
     ref_id: str
+    center_id: str
     device_id: int | None
     created_at: datetime
     sent_at: datetime | None

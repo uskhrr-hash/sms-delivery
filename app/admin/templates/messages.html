@@ -23,7 +23,7 @@
   <table>
     <tr>
       <th>Время</th><th>Статус</th><th>Доставка</th><th>Телефон</th><th>Текст</th>
-      <th>Источник</th><th>Устр.</th><th>Ошибка</th><th>Callback</th>
+      <th>Источник</th><th>Центр</th><th>Устр.</th><th>Ошибка</th><th>Callback</th>
     </tr>
     {% for m in messages %}
     <tr>
@@ -33,6 +33,7 @@
       <td>{{ m.phone }}</td>
       <td>{{ m.text[:80] }}{% if m.text|length > 80 %}…{% endif %}</td>
       <td>{{ m.source }} / {{ m.ref_id }}</td>
+      <td>{{ m.center_id or '—' }}</td>
       <td>{{ m.device_id or '—' }}</td>
       <td class="err">{{ m.delivery_error or m.last_error or '' }}</td>
       <td>{{ 'да' if m.callback_at else '—' }}</td>

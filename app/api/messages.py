@@ -30,6 +30,7 @@ def enqueue_message(
         text=body.text,
         source=body.source or client_name,
         ref_id=body.ref_id,
+        center_id=body.center_id or '',
         idempotency_key=body.idempotency_key,
         status=MessageStatus.QUEUED,
     )

@@ -45,6 +45,10 @@ def _migrate_schema() -> None:
             statements.append("ALTER TABLE devices ADD COLUMN gateway_password VARCHAR(128) DEFAULT ''")
         if 'sim_number' not in cols:
             statements.append('ALTER TABLE devices ADD COLUMN sim_number INTEGER')
+        if 'bind_center_id' not in cols:
+            statements.append("ALTER TABLE devices ADD COLUMN bind_center_id VARCHAR(32) DEFAULT ''")
+        if 'bind_center_label' not in cols:
+            statements.append("ALTER TABLE devices ADD COLUMN bind_center_label VARCHAR(200) DEFAULT ''")
         for stmt in statements:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
@@ -76,6 +80,8 @@ def _migrate_schema() -> None:
             statements.append(f'ALTER TABLE outbound_messages ADD COLUMN delivered_at {ts_type}')
         if 'callback_at' not in cols:
             statements.append(f'ALTER TABLE outbound_messages ADD COLUMN callback_at {ts_type}')
+        if 'center_id' not in cols:
+            statements.append("ALTER TABLE outbound_messages ADD COLUMN center_id VARCHAR(32) DEFAULT ''")
         for stmt in statements:
             with engine.begin() as conn:
                 conn.execute(text(stmt))

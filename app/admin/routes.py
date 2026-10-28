@@ -15,6 +15,7 @@ from app.database import get_db
 from app.models import ApiClient, Device, IncomingMessage, MessageStatus, OutboundMessage
 from app.services.api_clients import create_client, mask_api_key, regenerate_key
 from app.services.diagnostics import collect_checks, enqueue_test_sms
+from app.services.send_routing import normalize_center_id
 
 router = APIRouter(prefix='/admin', tags=['admin'])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / 'templates'))
@@ -111,12 +112,16 @@ def add_device(
     sort_order: int = Form(0),
     sim_slots: str = Form('1'),
     sim_number: str = Form('auto'),
+    bind_center_id: str = Form(''),
+    bind_center_label: str = Form(''),
 ) -> RedirectResponse:
     base_name = name.strip()
     gw_id = gateway_device_id.strip()
     gw_user = gateway_username.strip()
     gw_pass = gateway_password.strip()
     dual = sim_slots.strip() == '2'
+    bind_cid = normalize_center_id(bind_center_id) or ''
+    bind_lbl = bind_center_label.strip()
 
     if dual:
         second_name = name_sim2.strip() or f'{base_name}-sim2'
@@ -129,6 +134,8 @@ def add_device(
                 phone_label=phone_label.strip(),
                 sort_order=sort_order,
                 sim_number=1,
+                bind_center_id=bind_cid,
+                bind_center_label=bind_lbl,
             )
         )
         db.add(
@@ -140,6 +147,8 @@ def add_device(
                 phone_label=phone_label_sim2.strip(),
                 sort_order=sort_order + 1,
                 sim_number=2,
+                bind_center_id=bind_cid,
+                bind_center_label=bind_lbl,
             )
         )
     else:
@@ -157,6 +166,8 @@ def add_device(
                 phone_label=phone_label.strip(),
                 sort_order=sort_order,
                 sim_number=sim,
+                bind_center_id=bind_cid,
+                bind_center_label=bind_lbl,
             )
         )
     try:
@@ -179,6 +190,8 @@ def update_device(
     phone_label: str = Form(''),
     sort_order: int = Form(0),
     sim_number: str = Form('auto'),
+    bind_center_id: str = Form(''),
+    bind_center_label: str = Form(''),
 ) -> RedirectResponse:
     device = db.get(Device, device_id)
     if not device:
@@ -196,6 +209,8 @@ def update_device(
     device.phone_label = phone_label.strip()
     device.sort_order = sort_order
     device.sim_number = sim
+    device.bind_center_id = normalize_center_id(bind_center_id) or ''
+    device.bind_center_label = bind_center_label.strip()
     try:
         db.commit()
     except IntegrityError:
