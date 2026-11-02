@@ -19,8 +19,9 @@ def _delivery_webhook_url() -> str:
     return f'{base}/api/v1/webhooks/delivery'
 
 
-def _pick_device_credentials(db: Session) -> tuple[str, str] | None:
-    device = db.scalar(
+def _unique_gateway_credentials(db: Session) -> list[tuple[str, str]]:
+    """У каждого телефона в Gateway своя учётка — webhooks нужны для каждой."""
+    devices = db.scalars(
         select(Device)
         .where(
             Device.enabled.is_(True),
@@ -28,27 +29,38 @@ def _pick_device_credentials(db: Session) -> tuple[str, str] | None:
             Device.gateway_password != '',
         )
         .order_by(Device.sort_order, Device.id)
-        .limit(1)
-    )
-    if not device:
-        return None
-    return device.gateway_username, device.gateway_password
+    ).all()
+    seen: set[tuple[str, str]] = set()
+    creds: list[tuple[str, str]] = []
+    for device in devices:
+        key = (device.gateway_username.strip(), device.gateway_password)
+        if key in seen:
+            continue
+        seen.add(key)
+        creds.append(key)
+    return creds
 
 
 async def ensure_delivery_webhooks_registered(db: Session) -> None:
-    creds = _pick_device_credentials(db)
-    if not creds:
+    creds_list = _unique_gateway_credentials(db)
+    if not creds_list:
         logger.warning('Delivery webhooks: нет устройства с учёткой Gateway для регистрации')
         return
 
-    username, password = creds
-    client = SmsGateClient(username=username, password=password)
     url = _delivery_webhook_url()
 
-    for event in DELIVERY_EVENTS:
-        webhook_id = f'sms-delivery-{event.replace(":", "-")}'
-        try:
-            await client.register_webhook(url=url, event=event, webhook_id=webhook_id)
-            logger.info('Gateway webhook registered: %s -> %s', event, url)
-        except SmsGateError as exc:
-            logger.warning('Gateway webhook register failed %s: %s', event, exc)
+    for username, password in creds_list:
+        client = SmsGateClient(username=username, password=password)
+        user_slug = username.strip().lower()
+        for event in DELIVERY_EVENTS:
+            webhook_id = f'sms-delivery-{user_slug}-{event.replace(":", "-")}'
+            try:
+                await client.register_webhook(url=url, event=event, webhook_id=webhook_id)
+                logger.info('Gateway webhook registered: user=%s event=%s -> %s', username, event, url)
+            except SmsGateError as exc:
+                logger.warning(
+                    'Gateway webhook register failed user=%s event=%s: %s',
+                    username,
+                    event,
+                    exc,
+                )

@@ -53,7 +53,13 @@ def handle_gateway_delivery_event(db: Session, data: dict) -> dict:
 
     msg = _find_outbound_message(db, payload)
     if not msg:
-        logger.info('Delivery webhook without matching message: event=%s', event)
+        inner = payload.payload or {}
+        logger.info(
+            'Delivery webhook without matching message: event=%s inner=%s top_id=%s',
+            event,
+            {k: inner.get(k) for k in ('messageId', 'id') if k in inner},
+            payload.id,
+        )
         return {'ok': True, 'unknown_message': True}
 
     inner = payload.payload or {}

@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.database import init_db
 from app.database import SessionLocal
 from app.services.api_clients import seed_clients_from_env
+from app.services.gateway_delivery_sync import sync_pending_from_gateway
 from app.services.gateway_webhooks import ensure_delivery_webhooks_registered
 from app.worker import worker_loop
 
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     try:
         seed_clients_from_env(db)
         await ensure_delivery_webhooks_registered(db)
+        await sync_pending_from_gateway(db, limit=250)
     finally:
         db.close()
     stop_event = asyncio.Event()

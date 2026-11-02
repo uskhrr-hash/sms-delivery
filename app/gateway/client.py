@@ -55,6 +55,19 @@ class SmsGateClient:
             raise SmsGateError(f'Gateway HTTP {resp.status_code}: {resp.text[:500]}')
         return resp.json()
 
+    async def get_message(self, message_id: str) -> dict[str, Any] | None:
+        """Статус исходящего по ext_id (UUID), который мы передаём при POST /messages."""
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(
+                f'{self._api_base}/messages/{message_id}',
+                auth=self._auth,
+            )
+        if resp.status_code == 404:
+            return None
+        if resp.status_code >= 400:
+            raise SmsGateError(f'Gateway HTTP {resp.status_code}: {resp.text[:500]}')
+        return resp.json()
+
     async def list_devices(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(f'{self._api_base}/devices', auth=self._auth)
