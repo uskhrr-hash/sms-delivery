@@ -74,11 +74,10 @@ def _is_stale_gateway_item(
     return False
 
 
-def _unique_gateway_credentials(db: Session) -> list[tuple[str, str]]:
+def _unique_gateway_credentials(db: Session, *, include_disabled: bool = True) -> list[tuple[str, str]]:
     devices = db.scalars(
         select(Device)
         .where(
-            Device.enabled.is_(True),
             Device.gateway_username != '',
             Device.gateway_password != '',
         )
@@ -87,6 +86,8 @@ def _unique_gateway_credentials(db: Session) -> list[tuple[str, str]]:
     seen: set[tuple[str, str]] = set()
     creds: list[tuple[str, str]] = []
     for device in devices:
+        if not include_disabled and not device.enabled:
+            continue
         key = (device.gateway_username.strip(), device.gateway_password)
         if key in seen:
             continue
