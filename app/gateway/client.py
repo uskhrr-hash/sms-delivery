@@ -68,6 +68,42 @@ class SmsGateClient:
             raise SmsGateError(f'Gateway HTTP {resp.status_code}: {resp.text[:500]}')
         return resp.json()
 
+    async def list_messages(
+        self,
+        *,
+        state: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {'limit': limit, 'offset': offset}
+        if state:
+            params['state'] = state
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(
+                f'{self._api_base}/messages',
+                params=params,
+                auth=self._auth,
+            )
+        if resp.status_code >= 400:
+            raise SmsGateError(f'Gateway HTTP {resp.status_code}: {resp.text[:500]}')
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        return data.get('items') or data.get('messages') or []
+
+    async def cancel_message(self, message_id: str) -> dict[str, Any]:
+        """Отмена Pending на сервере (DELETE); телефон перестаёт отправлять."""
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.delete(
+                f'{self._api_base}/messages/{message_id}',
+                auth=self._auth,
+            )
+        if resp.status_code == 409:
+            raise SmsGateError(f'Сообщение не в Pending: {resp.text[:300]}')
+        if resp.status_code >= 400:
+            raise SmsGateError(f'Gateway HTTP {resp.status_code}: {resp.text[:500]}')
+        return resp.json()
+
     async def list_devices(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(f'{self._api_base}/devices', auth=self._auth)

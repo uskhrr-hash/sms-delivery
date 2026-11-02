@@ -15,6 +15,7 @@ from app.database import get_db
 from app.models import ApiClient, Device, IncomingMessage, MessageStatus, OutboundMessage
 from app.services.api_clients import create_client, mask_api_key, regenerate_key
 from app.services.diagnostics import collect_checks, enqueue_test_sms
+from app.services.gateway_stale_cleanup import cancel_stale_gateway_pending
 from app.services.send_routing import normalize_center_id
 
 router = APIRouter(prefix='/admin', tags=['admin'])
@@ -91,11 +92,38 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     }
     devices = db.scalars(select(Device).order_by(Device.sort_order, Device.id)).all()
     device_error = request.session.pop('device_error', None)
+    cleanup_flash = request.session.pop('gateway_cleanup_stats', None)
     return templates.TemplateResponse(
         request,
         'dashboard.html',
-        {'stats': stats, 'devices': devices, 'settings': get_settings(), 'device_error': device_error},
+        {
+            'stats': stats,
+            'devices': devices,
+            'settings': get_settings(),
+            'device_error': device_error,
+            'cleanup_flash': cleanup_flash,
+        },
     )
+
+
+@router.post('/gateway/cancel-stale', dependencies=[Depends(require_admin)])
+async def gateway_cancel_stale(
+    request: Request,
+    db: Session = Depends(get_db),
+    min_age_hours: float = Form(6.0),
+    only_past_appointments: str = Form('1'),
+    max_cancel: int = Form(200),
+    dry_run: str = Form(''),
+) -> RedirectResponse:
+    stats = await cancel_stale_gateway_pending(
+        db,
+        min_age_hours=min_age_hours,
+        only_past_appointments=only_past_appointments in ('1', 'on', 'true', 'yes'),
+        max_cancel=max(1, min(max_cancel, 500)),
+        dry_run=dry_run in ('1', 'on', 'true', 'yes'),
+    )
+    request.session['gateway_cleanup_stats'] = stats
+    return RedirectResponse('/admin/', status.HTTP_303_SEE_OTHER)
 
 
 @router.post('/devices', dependencies=[Depends(require_admin)])
