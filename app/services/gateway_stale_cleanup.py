@@ -152,6 +152,7 @@ async def cancel_stale_gateway_pending(
                     stats['errors'] += 1
                     continue
 
+                outbound = db.get(OutboundMessage, msg_id)
                 if outbound and outbound.delivery_status == DeliveryStatus.PENDING:
                     mark_delivery_failed(
                         db,
