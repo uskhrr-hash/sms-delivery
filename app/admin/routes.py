@@ -111,7 +111,8 @@ async def gateway_cancel_stale(
     request: Request,
     db: Session = Depends(get_db),
     min_age_hours: float = Form(6.0),
-    only_past_appointments: str = Form('1'),
+    # Без галочки поле не приходит — default '0', иначе «сняли галочку», а фильтр остаётся.
+    only_past_appointments: str = Form('0'),
     max_cancel: int = Form(200),
     dry_run: str = Form(''),
 ) -> RedirectResponse:
